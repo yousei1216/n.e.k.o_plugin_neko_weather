@@ -1,6 +1,6 @@
 {
   "plugin.name": "Weather Catgirl",
-  "plugin.description": "Let your catgirl check the weather: current conditions, hourly rain chance, a 7-day forecast, plus what to wear and whether to take an umbrella. Set your city once and she will brief you every morning. Powered by Open-Meteo, no API key required",
+  "plugin.description": "Let your catgirl check the weather: current conditions, hourly rain chance, a 3-7 day forecast, plus what to wear and whether to take an umbrella. The full brief is posted straight into chat by the plugin so nothing gets trimmed. Set your city once and she will brief you every morning — with the occasional snarky translated-novel easter egg. Powered by Open-Meteo, no API key required",
   "entry.get_weather.name": "Check weather",
   "entry.get_weather.description": "Get the current weather and what to wear / whether to take an umbrella",
   "entry.get_hourly.name": "Hourly weather",

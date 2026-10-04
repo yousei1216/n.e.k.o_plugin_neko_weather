@@ -2,14 +2,14 @@
 id = "neko_weather"
 name = "天气猫娘"
 type = "plugin"
-description = "让猫娘帮你查天气。支持当前天气、逐小时降水、未来 7 天预报，并给出穿衣、带伞和出行建议；还可以设置常用城市，每天早上让猫娘主动播报今日天气。数据来自 Open-Meteo，完全免费，不需要 API Key。"
-short_description = "Live weather, hourly rain chance, 7-day forecast and daily morning brief — no API key required."
+description = "让猫娘帮你查天气。支持当前天气、逐小时降水、未来 3~7 天预报，并给出穿衣、带伞和出行建议。完整播报由插件直接显示在聊天里，不会被压缩；还可以设置常用城市、每天早上主动播报，偶尔还会蹦出一段阴阳怪气翻译腔的彩蛋。数据来自 Open-Meteo，完全免费，不需要 API Key。"
+short_description = "Live weather, hourly rain chance, multi-day forecast, daily morning brief and a snarky easter egg — no API key required."
 keywords = ["天气", "weather", "气温", "下雨", "带伞", "穿衣", "预报", "forecast", "降雨", "気温", "天気", "날씨", "погода"]
 version = "0.1.0"
 entry = "plugin.plugins.neko_weather:NekoWeatherPlugin"
 
 [plugin.author]
-name = "N.E.K.O Community"
+name = "yousei1216"
 
 [plugin.sdk]
 recommended = ">=0.1.0,<0.2.0"
