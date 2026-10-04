@@ -36,12 +36,10 @@ from plugin.sdk.plugin import (
 )
 
 from ._http import HttpError
-from ._snark import maybe_snark, normalize_probability, render_snark, snark_category
+from ._snark import maybe_snark, normalize_probability, snark_category
 from ._weather import (
     build_hourly_speech,
     build_report,
-    cat_suffix,
-    describe,
     fetch_forecast,
     geocode,
 )
