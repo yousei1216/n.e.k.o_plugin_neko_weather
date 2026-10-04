@@ -501,10 +501,9 @@ class NekoWeatherPlugin(NekoPluginBase):
         description=(
             "查询城市天气。用户问「今天天气怎么样」「外面冷不冷」「明天要带伞吗」"
             "「杭州天气」「现在几度」「今天热不热」「要不要穿外套」这类问题时调用。\n"
-            "返回的 speech 字段已经是你**要照念的完整台词**（含地名、气温、体感、湿度、风速、"
-            "未来几天预报、穿衣/带伞/出行建议，以及猫娘语气）。\n"
-            "务必把 speech **完整念出来**：不要省略、不要概括、不要只挑气温和体感两项，"
-            "也不要改写成生硬的播报腔。用户想听的就是那一整段。\n"
+            "返回值就是一段写好的台词。**请从头到尾原样念出整段文字，一个字都不要改，也不要删。**\n"
+            "不要概括、不要只挑气温和体感、不要另起话头、不要加解释。"
+            "用户要听的就是这整段，少一句都算答错。\n"
             "如果用户明确想听你主动播报，用 push_weather_brief 更合适。"
         ),
         parameters={
@@ -531,33 +530,33 @@ class NekoWeatherPlugin(NekoPluginBase):
     async def llm_get_weather(
         self, *, city: str = "", days: Optional[int] = None, include_hourly: bool = False
     ):
-        settings = await self._settings()
         try:
             report = await self._report(city, days=days)
         except SdkError as exc:
             return {"error": str(exc)}
 
-        # speech 放第一个，且用 ** 包起来 —— 很多模型会优先完整照念被强调的字段，
-        # 而不是把它当数据去总结。
-        result = {
-            "speech": f"**{await self._speak(report)}**",
-            "location": report["location"]["display"],
-            "weather": report["current"]["weather"],
-            "temperature": report["current"].get("temperature"),
-            "apparent_temperature": report["current"].get("apparent_temperature"),
-            "humidity": report["current"].get("humidity"),
-            "wind_speed": report["current"].get("wind_speed"),
-            "daily": report["daily"],
-            "advice": report["advice"],
-        }
+        speech = await self._speak(report)
+        self.logger.info(
+            "天气播报（LLM 工具）%s %s，speech %d 字",
+            report["location"]["display"],
+            report["current"]["weather"],
+            len(speech),
+        )
+
+        # 这里**故意只返回一段纯文本**，不返回结构化字段。
+        # 实测：一旦同时给出 temperature / humidity / daily 等字段，模型就会去"总结"这些
+        # 数据，而不是照念台词，导致湿度、风速、未来几天预报被丢掉。
+        # 少给材料，它才只能照念。
         if include_hourly:
-            result["hourly_speech"] = build_hourly_speech(
+            settings = await self._settings()
+            hourly = build_hourly_speech(
                 report["location"]["display"],
                 report["hourly"],
                 cute=settings["cute"],
                 cat_suffix_text=settings["cat_suffix"],
             )
-        return result
+            return f"{speech}\n\n{hourly}"
+        return speech
 
     @llm_tool(
         name="set_home_city",
