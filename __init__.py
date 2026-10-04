@@ -501,10 +501,9 @@ class NekoWeatherPlugin(NekoPluginBase):
         description=(
             "查询城市天气。用户问「今天天气怎么样」「外面冷不冷」「明天要带伞吗」"
             "「杭州天气」「现在几度」「今天热不热」「要不要穿外套」这类问题时调用。\n"
-            "返回值就是一段写好的台词。**请从头到尾原样念出整段文字，一个字都不要改，也不要删。**\n"
-            "不要概括、不要只挑气温和体感、不要另起话头、不要加解释。"
-            "用户要听的就是这整段，少一句都算答错。\n"
-            "如果用户明确想听你主动播报，用 push_weather_brief 更合适。"
+            "调用后完整播报会由插件直接显示在聊天里，用户已经看到了。\n"
+            "你的返回值只是一句确认，不要复述天气内容（否则会和上面那条重复）。"
+            "用一句可爱的短话回应即可，比如「人家把天气写在上面啦～」。"
         ),
         parameters={
             "type": "object",
@@ -521,7 +520,7 @@ class NekoWeatherPlugin(NekoPluginBase):
                     "type": "boolean",
                     "description": (
                         "用户关心「等会儿会不会下雨」「下午要不要带伞」时设为 true，"
-                        "会额外带上未来几小时的逐小时预报。"
+                        "会额外附上未来几小时的逐小时预报。"
                     ),
                 },
             },
@@ -530,33 +529,49 @@ class NekoWeatherPlugin(NekoPluginBase):
     async def llm_get_weather(
         self, *, city: str = "", days: Optional[int] = None, include_hourly: bool = False
     ):
+        settings = await self._settings()
         try:
             report = await self._report(city, days=days)
         except SdkError as exc:
             return {"error": str(exc)}
 
         speech = await self._speak(report)
+
+        # 逐小时：用户明确问了才附上
+        if include_hourly:
+            speech = (
+                f"{speech}\n"
+                + build_hourly_speech(
+                    report["location"]["display"],
+                    report["hourly"],
+                    cute=settings["cute"],
+                    cat_suffix_text=settings["cat_suffix"],
+                )
+            )
+
+        # ★ 关键：把完整播报**直接推进聊天流**。
+        # 实测 N.E.K.O 的对话模型会固定地"用自己的话复述"工具返回的内容，
+        # 无论怎么强化措辞、加粗强调、还是只返回纯文本，湿度/风速/未来几天预报
+        # 都会在复述时被丢掉。走 push_message 则完全绕开模型改写，
+        # 主进程日志里能看到 [MESSAGE FORWARD] 原样转发。
+        # 这里用 read：让模型知道"已经播报过了"，但不要它再重复一遍，
+        # 避免聊天里出现两条一模一样的长文本。
+        pushed = await self._push_speech(speech, priority=6, force_ai_behavior="read")
         self.logger.info(
-            "天气播报（LLM 工具）%s %s，speech %d 字",
+            "天气播报（LLM 工具）%s %s，speech %d 字，推送=%s",
             report["location"]["display"],
             report["current"]["weather"],
             len(speech),
+            pushed,
         )
 
-        # 这里**故意只返回一段纯文本**，不返回结构化字段。
-        # 实测：一旦同时给出 temperature / humidity / daily 等字段，模型就会去"总结"这些
-        # 数据，而不是照念台词，导致湿度、风速、未来几天预报被丢掉。
-        # 少给材料，它才只能照念。
-        if include_hourly:
-            settings = await self._settings()
-            hourly = build_hourly_speech(
-                report["location"]["display"],
-                report["hourly"],
-                cute=settings["cute"],
-                cat_suffix_text=settings["cat_suffix"],
-            )
-            return f"{speech}\n\n{hourly}"
-        return speech
+        if not pushed:
+            # 推送失败就退回让模型转述，总比什么都没有强
+            return speech
+        return (
+            f"完整播报已经显示在聊天里了（{report['location']['display']}）。"
+            "用一句可爱的短话回应主人即可，不要重复天气内容。"
+        )
 
     @llm_tool(
         name="set_home_city",
@@ -615,9 +630,10 @@ class NekoWeatherPlugin(NekoPluginBase):
     @llm_tool(
         name="push_weather_brief",
         description=(
-            "立刻让猫娘主动播报一次今日天气（会出现在聊天里并由猫娘念出来）。"
-            "用户说「给我播报一下天气」「念一下今天天气」「早上好，说一下天气」时调用。\n"
-            "适合用户明确想**听**猫娘说话的场景，而不是单纯想知道温度。"
+            "让猫娘主动播报一次今日天气。用户说「给我播报一下天气」「念一下今天天气」"
+            "「早上好，说一下天气」时调用。\n"
+            "播报会由插件直接显示在聊天里并由猫娘念出来。你只需回一句可爱的确认，"
+            "不要重复天气内容。"
         ),
         parameters={
             "type": "object",
@@ -632,15 +648,16 @@ class NekoWeatherPlugin(NekoPluginBase):
         except SdkError as exc:
             return {"error": str(exc)}
         speech = await self._speak(report)
-        # 这里用 respond：让模型读取并回应，从而走角色语音把播报念出来
+        # respond：让模型读取并回应，从而走角色语音把播报念出来
         submitted = await self._push_speech(
             speech, priority=6, force_ai_behavior="respond"
         )
-        return {
-            "submitted": submitted,
-            "location": report["location"]["display"],
-            "speech": speech,
-        }
+        if not submitted:
+            return speech
+        return (
+            f"已经主动播报过 {report['location']['display']} 的天气了。"
+            "回一句可爱的短话即可，不要重复天气内容。"
+        )
 
     @llm_tool(
         name="check_daily_weather_push",
