@@ -501,8 +501,11 @@ class NekoWeatherPlugin(NekoPluginBase):
         description=(
             "查询城市天气。用户问「今天天气怎么样」「外面冷不冷」「明天要带伞吗」"
             "「杭州天气」「现在几度」「今天热不热」「要不要穿外套」这类问题时调用。\n"
-            "返回的 speech 字段已经是**猫娘口吻、可以直接念出来**的完整播报，"
-            "请自然地转述给用户，不要改写成生硬的播报腔，也不要重复问一遍城市。"
+            "返回的 speech 字段已经是你**要照念的完整台词**（含地名、气温、体感、湿度、风速、"
+            "未来几天预报、穿衣/带伞/出行建议，以及猫娘语气）。\n"
+            "务必把 speech **完整念出来**：不要省略、不要概括、不要只挑气温和体感两项，"
+            "也不要改写成生硬的播报腔。用户想听的就是那一整段。\n"
+            "如果用户明确想听你主动播报，用 push_weather_brief 更合适。"
         ),
         parameters={
             "type": "object",
@@ -534,12 +537,17 @@ class NekoWeatherPlugin(NekoPluginBase):
         except SdkError as exc:
             return {"error": str(exc)}
 
+        # speech 放第一个，且用 ** 包起来 —— 很多模型会优先完整照念被强调的字段，
+        # 而不是把它当数据去总结。
         result = {
-            "speech": await self._speak(report),
+            "speech": f"**{await self._speak(report)}**",
             "location": report["location"]["display"],
             "weather": report["current"]["weather"],
             "temperature": report["current"].get("temperature"),
             "apparent_temperature": report["current"].get("apparent_temperature"),
+            "humidity": report["current"].get("humidity"),
+            "wind_speed": report["current"].get("wind_speed"),
+            "daily": report["daily"],
             "advice": report["advice"],
         }
         if include_hourly:
